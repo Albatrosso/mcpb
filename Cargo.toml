@@ -1,0 +1,18 @@
+[package]
+name = "mcpb"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+description = "Small macOS CLI for launching Chromium-based browsers in MCP-compatible mode"
+keywords = ["mcp", "browser", "chrome-devtools", "macos", "cli"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+plist = "=1.7.0"
+serde = { version = "=1.0.219", features = ["derive"] }
+ureq = "=3.0.11"
+
+[dev-dependencies]
+assert_cmd = "=2.0.16"
+predicates = "=3.1.3"
+tempfile = "=3.19.1"
