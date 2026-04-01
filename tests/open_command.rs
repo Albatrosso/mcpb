@@ -148,6 +148,36 @@ fn prints_port_override_in_ready_output() {
 }
 
 #[test]
+fn keeps_stderr_quiet_while_waiting_for_browser_ready_non_interactively() {
+    let fixture = Fixture::new();
+    let port = free_port();
+    fixture.write_fake_app(
+        "Brave Browser.app",
+        "Brave",
+        "Brave Browser",
+        "com.brave.Browser",
+        FakeBrowserMode::DelayedReady,
+    );
+
+    let mut command = fixture.command();
+    command
+        .arg("open")
+        .arg("--brave")
+        .arg("--port")
+        .arg(port.to_string());
+
+    command
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "All set. Brave launched in MCP mode.",
+        ))
+        .stderr(predicate::str::is_empty());
+
+    terminate_pid_file_process(&fixture.pid_file);
+}
+
+#[test]
 fn ignores_headless_browser_processes_when_deciding_to_restart() {
     let fixture = Fixture::new();
     let port = free_port();
@@ -272,6 +302,7 @@ printf 'false\n'
         let executable_path = macos_dir.join(executable_name);
         let script = match mode {
             FakeBrowserMode::Ready => ready_script(),
+            FakeBrowserMode::DelayedReady => delayed_ready_script(),
             FakeBrowserMode::NoReadyEndpoint => no_ready_script(),
         };
         fs::write(&executable_path, script).unwrap();
@@ -303,6 +334,7 @@ printf 'false\n'
 #[derive(Clone, Copy)]
 enum FakeBrowserMode {
     Ready,
+    DelayedReady,
     NoReadyEndpoint,
 }
 
@@ -408,6 +440,71 @@ cleanup() {
   exit 0
 }
 trap cleanup EXIT TERM INT
+while true; do
+  sleep 1
+done
+"#
+}
+
+fn delayed_ready_script() -> &'static str {
+    r#"#!/bin/sh
+set -eu
+pid_file="${MCPB_FAKE_PID_FILE:-}"
+if [ -n "$pid_file" ]; then
+  printf '%s' "$$" > "$pid_file"
+fi
+cleanup() {
+  if [ -n "${server_pid:-}" ]; then
+    kill "$server_pid" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$pid_file" ]; then
+    rm -f "$pid_file"
+  fi
+  exit 0
+}
+trap cleanup EXIT TERM INT
+port=""
+for arg in "$@"; do
+  case "$arg" in
+    --remote-debugging-port=*)
+      port="${arg#*=}"
+      ;;
+  esac
+done
+if [ -z "$port" ]; then
+  while true; do
+    sleep 1
+  done
+fi
+sleep 0.4
+/usr/bin/python3 - "$port" <<'PY' &
+import http.server
+import json
+import socketserver
+import sys
+
+port = int(sys.argv[1])
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/json/version":
+            payload = json.dumps({"Browser": "Fake Browser", "webSocketDebuggerUrl": f"ws://127.0.0.1:{port}/devtools/browser/fake"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        self.send_response(404)
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+with socketserver.TCPServer(("127.0.0.1", port), Handler) as httpd:
+    httpd.serve_forever()
+PY
+server_pid=$!
 while true; do
   sleep 1
 done

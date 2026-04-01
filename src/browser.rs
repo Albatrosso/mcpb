@@ -1,7 +1,7 @@
 use crate::discovery::BrowserApp;
 use std::env;
 use std::fs;
-use std::io;
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -92,14 +92,30 @@ pub fn wait_until_ready(port: u16) -> Result<(), String> {
     let timeout = Duration::from_millis(timeout_ms("MCPB_READY_TIMEOUT_MS", 15_000));
     let start = Instant::now();
     let ready_url = format!("http://127.0.0.1:{port}/json/version");
+    let show_wait_status = io::stderr().is_terminal();
+    let mut stderr = io::stderr().lock();
+    let mut frame_index = 0;
+    let mut spinner_visible = false;
 
     while start.elapsed() < timeout {
         let result = ureq::get(&ready_url).call();
         if matches!(result, Ok(response) if response.status() == 200) {
+            if spinner_visible {
+                let _ = clear_wait_status(&mut stderr);
+            }
             return Ok(());
         }
 
+        if show_wait_status {
+            let _ = write_wait_status(&mut stderr, frame_index);
+            spinner_visible = true;
+            frame_index += 1;
+        }
         thread::sleep(Duration::from_millis(100));
+    }
+
+    if spinner_visible {
+        let _ = clear_wait_status(&mut stderr);
     }
 
     Err(format!(
@@ -154,4 +170,25 @@ fn profile_dir(slug: &str) -> Result<PathBuf, String> {
         .join("mcpb")
         .join("profiles")
         .join(slug))
+}
+
+fn write_wait_status(stderr: &mut impl Write, frame_index: usize) -> Result<(), String> {
+    let frames = ['/', '-', '\\', '|'];
+    write!(
+        stderr,
+        "\rOpening browser {}",
+        frames[frame_index % frames.len()]
+    )
+    .map_err(|error| format!("Could not write wait status: {error}"))?;
+    stderr
+        .flush()
+        .map_err(|error| format!("Could not write wait status: {error}"))
+}
+
+fn clear_wait_status(stderr: &mut impl Write) -> Result<(), String> {
+    write!(stderr, "\r                  \r")
+        .map_err(|error| format!("Could not write wait status: {error}"))?;
+    stderr
+        .flush()
+        .map_err(|error| format!("Could not write wait status: {error}"))
 }
