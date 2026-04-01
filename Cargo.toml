@@ -3,6 +3,7 @@ name = "mcpb"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.86"
+license = "MIT"
 description = "Small macOS CLI for launching Chromium-based browsers in MCP-compatible mode"
 keywords = ["mcp", "browser", "chrome-devtools", "macos", "cli"]
 categories = ["command-line-utilities"]
