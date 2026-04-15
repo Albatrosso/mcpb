@@ -29,7 +29,7 @@ cargo install --path .
 If you prefer a local dev build without installing:
 
 ```bash
-cargo run -- open --brave
+cargo run -- open --<your browser name>
 ```
 
 ## Usage
@@ -37,19 +37,19 @@ cargo run -- open --brave
 Open a browser in MCP mode:
 
 ```bash
-mcpb open --brave
+mcpb open --<your browser name>
 ```
 
 Override the debug port:
 
 ```bash
-mcpb open --brave --port 9333
+mcpb open --<your browser name> --port 9333
 ```
 
 When the browser is already running, `mcpb` asks for confirmation before restarting it:
 
 ```text
-Browser "Brave" must be restarted for MCP mode. Close it now? [Y/n]
+Browser "<your browser name>" must be restarted for MCP mode. Close it now? [Y/n]
 ```
 
 On success it prints:
